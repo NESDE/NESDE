@@ -62,7 +62,7 @@ class AntiCoagulantEnv(gym.Env):
             St, St_var = self.__nesde(self.prev_S, self.prev_S_var, dt*torch.ones(1,1,device=self.__nesde.device), U=torch.Tensor(action).to(self.__nesde.device).view(1,1))
 
         # sample state:
-        dist = self.dist(St[...,0],torch.clip(St_var[...,0,0],1e-1))
+        dist = self.dist(St[...,0],torch.clip(St_var[...,0,0],min=1e-1))
         Sample = torch.clip(dist.sample(),max=125.0,min=18.0)
         self.prev_S, self.prev_S_var = self.__nesde.conditional_dist(St, St_var, self.S_mask, Sample)
         self.curr_time = self.curr_time + dt
@@ -90,7 +90,7 @@ class AntiCoagulantEnv(gym.Env):
             St, St_var = self.__nesde.get_prior()
 
         # sample state:
-        dist = self.dist(St[...,0],St_var[...,0,0])
+        dist = self.dist(St[...,0],torch.clip(St_var[...,0,0],min=1e-1))
         Sample = torch.clip(dist.sample(),max=125.0,min=18.0)
         self.prev_S, self.prev_S_var = self.__nesde.conditional_dist(St, St_var, self.S_mask, Sample)
         self.state = Sample.view(1).cpu().numpy()
