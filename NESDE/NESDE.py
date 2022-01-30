@@ -436,6 +436,7 @@ class NESDE(nn.Module):
         Xt, Xt_var = self.esde_cal(Xt, Xt_var, times - current_time, params, U, [current_time[j] + t0_ac[j] for j in range(len(t0_ac))])
         Xt = Xt.view(-1,self.n)
         Xt_var = Xt_var.view(-1,self.n,self.n)
+
         St = torch.cat([Xt[:,:self.m] + bias,bias,Xt],dim=1)
         St_var = torch.cat([torch.cat([Xt_var[:,:self.m,:self.m] + var,var ,Xt_var[:,:self.m,:]],dim=2),
                             torch.cat([var,var,torch.zeros(var.shape[0],self.m,self.n,device=self.device)],dim=2),
@@ -600,8 +601,6 @@ class HyperNESDE(NESDE):
             else:
                 self.lambdas_fac = 1.0
     def forward(self, S0, S0_var, times, U=None, t0_ac=[0]):
-        if S0 is None:
-            self.rc_state = None
         St, St_var = super(HyperNESDE, self).forward(S0, S0_var, times, U, t0_ac)
         return St, St_var
 
@@ -639,7 +638,7 @@ class HyperNESDE(NESDE):
         feature_ids = torch.sort(torch.randperm(feature.shape[0])[:2]).values
         for i in torch.arange(feature_ids[0],feature_ids[1] + 1):
             self.set_context(feature[i].view(-1,self.embed_dim).to(self.device))
-        weight = ((277.4 - 30.1) * feature[feature_ids[1], 4].cpu().numpy()) + 30.1
+        weight = ((277.4 - 30.1) * (feature[feature_ids[1], 4].cpu().numpy() - 1.0)) + 30.1
         return weight
 
 
