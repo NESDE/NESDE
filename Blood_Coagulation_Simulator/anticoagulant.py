@@ -20,9 +20,10 @@ class AntiCoagulantEnv(gym.Env):
         with open(dir_path + "/nesde_hyperparameters.pkl", 'rb') as f:
             nesde_kwargs = pickle.load(f)
         nesde_kwargs['device'] = torch.device(device)
-        self.nesde = HyperNESDE(**nesde_kwargs).to(device)
-        self.nesde.device = device
-        self.nesde.load_state_dict(torch.load(dir_path + "/nesde_weights.pt",map_location=device))
+        self.__nesde = HyperNESDE(**nesde_kwargs).to(device)
+        self.__nesde.device = device
+        self.__nesde.load_state_dict(torch.load(dir_path + "/nesde_weights.pt",map_location=device))
+        self.__nesde.eval()
         self.dist = torch.distributions.Normal
         self.action_space = spaces.Box(
             low=0.0,
@@ -44,7 +45,7 @@ class AntiCoagulantEnv(gym.Env):
         self.max_episode_len = max_episode_len
         self.curr_weight = None
         self.target_aPTT = target_aPTT
-        self.S_mask = torch.zeros(self.nesde.n + 2*self.nesde.m,device=device).type(torch.bool)
+        self.S_mask = torch.zeros(self.__nesde.n + 2*self.__nesde.m,device=device).type(torch.bool)
         self.S_mask[0] = True
 
     def seed(self, seed=None):
@@ -58,12 +59,12 @@ class AntiCoagulantEnv(gym.Env):
         action = action / self.curr_weight
         assert self.action_space.contains(action), err_msg
         with torch.no_grad():
-            St, St_var = self.nesde(self.prev_S, self.prev_S_var, dt*torch.ones(1,1,device=self.nesde.device), U=torch.Tensor(action).to(self.nesde.device).view(1,1))
-        # sample
+            St, St_var = self.__nesde(self.prev_S, self.prev_S_var, dt*torch.ones(1,1,device=self.__nesde.device), U=torch.Tensor(action).to(self.__nesde.device).view(1,1))
+
+        # sample state:
         dist = self.dist(St[...,0],torch.clip(St_var[...,0,0],1e-1))
         Sample = torch.clip(dist.sample(),max=125.0,min=18.0)
-        self.prev_S, self.prev_S_var = self.nesde.conditional_dist(St, St_var, self.S_mask, Sample)
-
+        self.prev_S, self.prev_S_var = self.__nesde.conditional_dist(St, St_var, self.S_mask, Sample)
         self.curr_time = self.curr_time + dt
         done = False
         self.state = Sample.view(1).cpu().numpy()
@@ -83,14 +84,15 @@ class AntiCoagulantEnv(gym.Env):
     def reset(self):
         self.prev_S = None
         self.prev_S_var = None
-        # sample context
+        # sample context:
         with torch.no_grad():
-            self.curr_weight = self.nesde.sample_context()
-            St, St_var = self.nesde(self.prev_S, self.prev_S_var, torch.zeros(1, 1, device=self.nesde.device),
-                                    U=torch.zeros(1,1,device=self.nesde.device))
+            self.curr_weight = self.__nesde.sample_context()
+            St, St_var = self.__nesde.get_prior()
+
+        # sample state:
         dist = self.dist(St[...,0],St_var[...,0,0])
         Sample = torch.clip(dist.sample(),max=125.0,min=18.0)
-        self.prev_S, self.prev_S_var = self.nesde.conditional_dist(St, St_var, self.S_mask, Sample)
+        self.prev_S, self.prev_S_var = self.__nesde.conditional_dist(St, St_var, self.S_mask, Sample)
         self.state = Sample.view(1).cpu().numpy()
         self.curr_time = 0.0
         return self.state
@@ -99,7 +101,7 @@ class AntiCoagulantEnv(gym.Env):
         print("Not Implemented!")
 
     def close(self):
-        del self.nesde
+        del self.__nesde
 
 if __name__ == "__main__":
 
@@ -110,7 +112,7 @@ if __name__ == "__main__":
     state = env.reset()
     num_steps = 120003
     for i in range(num_steps):
-        state, reward, done, info = env.step(0.1*np.ones_like(sample))
+        state, reward, done, info = env.step(10.0*np.ones_like(sample))
         if done:
             state = env.reset()
 
