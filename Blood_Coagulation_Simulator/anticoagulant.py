@@ -13,6 +13,10 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 class AntiCoagulantEnv(gym.Env):
 
     def __init__(self, device, dt=1.0, max_episode_len=6000, target_aPTT=[40,60]):
+        # device - device to run at
+        # dt - the default time between steps
+        # max_episode_len - the maximal length of each episode
+        # target_aPTT - a tuple with the low and high ranges for the target aPTT
         with open(dir_path + "/nesde_hyperparameters.pkl", 'rb') as f:
             nesde_kwargs = pickle.load(f)
         nesde_kwargs['device'] = torch.device(device)
