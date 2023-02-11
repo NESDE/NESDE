@@ -1,1 +1,0 @@
-from .anticoagulant import AntiCoagulantEnv
